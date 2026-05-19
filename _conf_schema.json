@@ -1,114 +1,138 @@
 {
   "enabled": {
-    "description": "启用插件总开关",
+    "description": "启用插件",
     "type": "bool",
-    "default": true
+    "default": true,
+    "hint": "插件总开关。关闭后不会采集图片、不会自动回复，也不会处理本插件指令。"
   },
   "auto_collect_enabled": {
-    "description": "启用群聊图片自动采集",
+    "description": "自动采集图片",
     "type": "bool",
-    "default": true
+    "default": true,
+    "hint": "开启后会监听群聊中的 Image 消息，并按采样概率保存表情包。"
   },
   "auto_reply_enabled": {
-    "description": "默认启用自动表情回复；也可用 /meme_on 和 /meme_off 按群覆盖",
+    "description": "默认自动回复",
     "type": "bool",
-    "default": false
+    "default": false,
+    "hint": "控制未单独设置过的群是否默认启用自动表情回复；单个群可用 /meme_on 和 /meme_off 覆盖。"
   },
   "collect_probability": {
-    "description": "自动采集采样概率，0.05 表示 5%",
+    "description": "自动采集概率",
     "type": "float",
-    "default": 0.05
+    "default": 0.05,
+    "hint": "每次群消息包含图片时被随机保存的概率，0.05 表示 5%，0 表示不随机保存，1 表示每张都尝试保存。"
   },
   "auto_reply_probability": {
-    "description": "命中关键词后的发送概率，1.0 表示每次命中都发送",
+    "description": "自动回复概率",
     "type": "float",
-    "default": 1.0
+    "default": 1.0,
+    "hint": "文本命中关键词且冷却满足后真正发送表情包的概率，1.0 表示每次命中都发送。"
   },
   "max_images_per_day": {
-    "description": "每天最多自动/手动保存的图片数量，0 表示不限制",
+    "description": "每日保存上限",
     "type": "int",
-    "default": 50
+    "default": 50,
+    "hint": "限制每天最多新增多少张表情包，防止图片库过快膨胀；设为 0 表示不限制。"
   },
   "image_max_size_mb": {
-    "description": "单张图片最大体积 MB",
+    "description": "图片大小上限 MB",
     "type": "float",
-    "default": 8.0
+    "default": 8.0,
+    "hint": "超过该大小的图片不会保存，避免占用过多磁盘空间或下载过慢。"
   },
   "recent_image_cache_size": {
-    "description": "每个群缓存最近多少张图片，用于 /meme_save latest",
+    "description": "最近图片缓存数量",
     "type": "int",
-    "default": 30
+    "default": 30,
+    "hint": "每个群在内存中记录最近 N 张图片，用于 /meme_save latest 保存最近一张图。"
   },
   "group_whitelist": {
-    "description": "群白名单，留空表示所有群；填群号字符串列表",
+    "description": "群白名单",
     "type": "list",
-    "default": []
+    "default": [],
+    "hint": "只允许这些群使用自动采集和自动回复；留空表示不启用白名单限制。请填写群号字符串列表。"
   },
   "group_blacklist": {
-    "description": "群黑名单，填群号字符串列表",
+    "description": "群黑名单",
     "type": "list",
-    "default": []
+    "default": [],
+    "hint": "这些群不会自动采集和自动回复；黑名单优先级高于白名单。请填写群号字符串列表。"
   },
   "auto_reply_cooldown_seconds": {
-    "description": "同一群自动发送表情包冷却秒数",
+    "description": "自动回复冷却秒数",
     "type": "int",
-    "default": 120
+    "default": 120,
+    "hint": "同一群两次自动发送表情包之间至少间隔多少秒，避免刷屏。"
   },
   "auto_collect_cooldown_seconds": {
-    "description": "同一群自动采集冷却秒数",
+    "description": "自动采集冷却秒数",
     "type": "int",
-    "default": 60
+    "default": 60,
+    "hint": "同一群两次随机自动保存图片之间至少间隔多少秒，手动 /meme_save 不受此项影响。"
   },
   "admin_users": {
-    "description": "管理员 QQ 号列表；留空时不做指令权限限制",
+    "description": "管理员 QQ 号",
     "type": "list",
-    "default": []
+    "default": [],
+    "hint": "允许使用管理指令的 QQ 号列表；留空表示任何人都能使用管理指令，生产群建议填写。"
   },
   "admin_token": {
-    "description": "本地管理面板 token，请务必修改",
+    "description": "管理面板 Token",
     "type": "string",
     "default": "change-me",
+    "hint": "访问管理面板和 API 时需要携带的 token。请务必改成难猜的字符串，不要发到群里。",
     "obvious_hint": true
   },
   "panel_enabled": {
-    "description": "启用本地 FastAPI 管理面板",
+    "description": "启用管理面板",
     "type": "bool",
-    "default": true
+    "default": true,
+    "hint": "开启后插件会启动本地 FastAPI 管理面板；需要安装 requirements.txt 中的 fastapi 和 uvicorn。"
   },
   "panel_host": {
-    "description": "管理面板监听地址，默认只监听本机",
+    "description": "管理面板监听范围",
     "type": "string",
-    "default": "127.0.0.1"
+    "default": "127.0.0.1",
+    "options": ["127.0.0.1", "0.0.0.0"],
+    "labels": ["127.0.0.1（仅本机访问）", "0.0.0.0（允许局域网访问）"],
+    "hint": "选择 127.0.0.1 时只有 AstrBot 所在机器能访问；选择 0.0.0.0 时同一局域网设备可通过该机器的局域网 IP 访问。不要直接暴露到公网。"
   },
   "panel_port": {
     "description": "管理面板端口",
     "type": "int",
-    "default": 8756
+    "default": 8756,
+    "hint": "管理面板 HTTP 服务监听的端口。若端口被占用，请改成其他未使用端口。"
   },
   "llm_provider": {
-    "description": "指定用于图片描述的模型提供商；留空则使用当前会话 provider",
+    "description": "多模态 LLM 提供商",
     "type": "string",
     "default": "",
-    "_special": "select_provider"
+    "_special": "select_provider",
+    "hint": "用于给图片生成描述、标签和情绪的模型提供商。留空时尝试使用当前会话正在使用的 provider。"
   },
   "llm_min_interval_seconds": {
-    "description": "LLM 标注最小调用间隔，避免过于频繁",
+    "description": "LLM 最小调用间隔",
     "type": "float",
-    "default": 6.0
+    "default": 6.0,
+    "hint": "两次图片标注请求之间至少间隔多少秒，用于降低模型调用频率和限流风险。"
   },
   "pending_review_when_llm_failed": {
-    "description": "LLM 失败时是否标记为待审核",
+    "description": "LLM 失败时待审核",
     "type": "bool",
-    "default": true
+    "default": true,
+    "hint": "开启后，即使 LLM 标注失败也会保存图片，并把记录标记为 pending_review，方便之后在面板人工补描述。"
   },
   "match_threshold": {
-    "description": "关键词匹配阈值，越高越保守",
+    "description": "关键词匹配阈值",
     "type": "float",
-    "default": 1.0
+    "default": 1.0,
+    "hint": "自动回复时文本与 description、tags、emotion 的最低匹配分数。数值越高越保守，误触发越少。"
   },
   "store_sender_id": {
-    "description": "是否保存发送者 QQ 号；默认关闭以保护隐私",
+    "description": "保存发送者 QQ 号",
     "type": "bool",
-    "default": false
+    "default": false,
+    "hint": "默认关闭以保护隐私。开启后会在数据库中记录图片来源发送者 QQ 号，仅在确有管理需求时启用。"
   }
 }

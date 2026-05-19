@@ -50,6 +50,7 @@ class MemeStealingConfig:
         values["image_max_size_mb"] = max(float(values["image_max_size_mb"]), 0.1)
         values["max_images_per_day"] = max(int(values["max_images_per_day"]), 0)
         values["recent_image_cache_size"] = max(int(values["recent_image_cache_size"]), 1)
+        values["panel_host"] = normalize_panel_host(values["panel_host"])
         values["panel_port"] = int(values["panel_port"])
         values["llm_min_interval_seconds"] = max(float(values["llm_min_interval_seconds"]), 0.0)
         values["match_threshold"] = max(float(values["match_threshold"]), 0.0)
@@ -74,6 +75,12 @@ class MemeStealingConfig:
     def panel_url(self) -> str:
         return f"http://{self.panel_host}:{self.panel_port}/?token={self.admin_token}"
 
+    @property
+    def panel_access_hint(self) -> str:
+        if self.panel_host == "0.0.0.0":
+            return "当前配置允许局域网访问，请用运行 AstrBot 机器的局域网 IP 打开面板。"
+        return "当前配置仅允许本机访问。"
+
 
 def normalize_str_list(value: Any) -> list[str]:
     if value is None:
@@ -85,6 +92,13 @@ def normalize_str_list(value: Any) -> list[str]:
     else:
         return []
     return [str(item).strip() for item in items if str(item).strip()]
+
+
+def normalize_panel_host(value: Any) -> str:
+    host = str(value or "").strip()
+    if host in {"127.0.0.1", "0.0.0.0"}:
+        return host
+    return "127.0.0.1"
 
 
 def clamp_float(value: Any, minimum: float, maximum: float) -> float:

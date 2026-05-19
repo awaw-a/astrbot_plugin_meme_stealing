@@ -180,7 +180,11 @@ class MemeStealingPlugin(Star):
                 return "没有权限。"
             if not self.config.panel_enabled:
                 return "管理面板未启用，请在插件配置中开启 panel_enabled。"
-            return f"管理面板地址：{self.config.panel_url}\n请只在本机或可信网络访问，不要暴露到公网。"
+            return (
+                f"管理面板地址：{self.config.panel_url}\n"
+                f"{self.config.panel_access_hint}\n"
+                "请只在本机或可信局域网访问，不要暴露到公网。"
+            )
         if command == "meme_stats":
             if not self._is_admin(event):
                 return "没有权限。"
