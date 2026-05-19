@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>表情包管理</title>
+    <script>
+      window.ADMIN_TOKEN = new URLSearchParams(location.search).get("token") || "";
+      document.write(
+        `<link rel="stylesheet" href="/static/style.css?token=${encodeURIComponent(window.ADMIN_TOKEN)}" />`
+      );
+    </script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>表情包管理</h1>
+        <p id="stats">加载中...</p>
+      </div>
+      <div class="filters">
+        <input id="q" type="search" placeholder="搜索描述、标签、hash" />
+        <select id="status">
+          <option value="">全部</option>
+          <option value="pending">待审核</option>
+          <option value="enabled">已启用</option>
+          <option value="disabled">已禁用</option>
+        </select>
+        <button id="refresh">刷新</button>
+      </div>
+    </header>
+
+    <main id="grid" class="grid"></main>
+
+    <template id="card-template">
+      <article class="card">
+        <img class="preview" alt="表情包预览" />
+        <div class="meta">
+          <div class="row">
+            <strong class="meme-id"></strong>
+            <label><input class="enabled" type="checkbox" /> 启用</label>
+            <label><input class="pending" type="checkbox" /> 待审核</label>
+          </div>
+          <label>
+            描述
+            <textarea class="description" rows="3"></textarea>
+          </label>
+          <label>
+            标签
+            <input class="tags" type="text" />
+          </label>
+          <label>
+            情绪
+            <input class="emotion" type="text" />
+          </label>
+          <div class="row">
+            <span class="use-count"></span>
+            <button class="save">保存</button>
+            <button class="delete danger">删除</button>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script>
+      const token = window.ADMIN_TOKEN;
+      const grid = document.querySelector("#grid");
+      const stats = document.querySelector("#stats");
+      const q = document.querySelector("#q");
+      const status = document.querySelector("#status");
+      const refresh = document.querySelector("#refresh");
+      const tmpl = document.querySelector("#card-template");
+
+      function withToken(path) {
+        const join = path.includes("?") ? "&" : "?";
+        return `${path}${join}token=${encodeURIComponent(token)}`;
+      }
+
+      async function request(path, options = {}) {
+        const res = await fetch(withToken(path), {
+          ...options,
+          headers: {
+            "Content-Type": "application/json",
+            "X-Admin-Token": token,
+            ...(options.headers || {}),
+          },
+        });
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      }
+
+      function csvToList(value) {
+        return value
+          .split(/[,，、\s]+/)
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+
+      function listToCsv(value) {
+        return (value || []).join(",");
+      }
+
+      function renderStats(data) {
+        const s = data.stats || {};
+        stats.textContent = `总数 ${s.total || 0} / 启用 ${s.enabled || 0} / 待审核 ${s.pending_review || 0} / 今日保存 ${s.saved_today || 0}`;
+      }
+
+      function renderItem(item) {
+        const node = tmpl.content.cloneNode(true);
+        const card = node.querySelector(".card");
+        card.dataset.id = item.id;
+        node.querySelector(".preview").src = withToken(`/images/${item.id}`);
+        node.querySelector(".meme-id").textContent = `#${item.id}`;
+        node.querySelector(".enabled").checked = item.enabled;
+        node.querySelector(".pending").checked = item.pending_review;
+        node.querySelector(".description").value = item.description || "";
+        node.querySelector(".tags").value = listToCsv(item.tags);
+        node.querySelector(".emotion").value = listToCsv(item.emotion);
+        node.querySelector(".use-count").textContent = `使用 ${item.use_count || 0} 次`;
+
+        node.querySelector(".save").addEventListener("click", async () => {
+          await request(`/api/memes/${item.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              description: card.querySelector(".description").value,
+              tags: csvToList(card.querySelector(".tags").value),
+              emotion: csvToList(card.querySelector(".emotion").value),
+              enabled: card.querySelector(".enabled").checked,
+              pending_review: card.querySelector(".pending").checked,
+            }),
+          });
+          await load();
+        });
+
+        node.querySelector(".delete").addEventListener("click", async () => {
+          if (!confirm(`删除 #${item.id}？`)) return;
+          await request(`/api/memes/${item.id}`, { method: "DELETE" });
+          await load();
+        });
+        return node;
+      }
+
+      async function load() {
+        grid.innerHTML = "<div class='empty'>加载中...</div>";
+        const params = new URLSearchParams({
+          q: q.value.trim(),
+          status: status.value,
+          limit: "120",
+        });
+        const data = await request(`/api/memes?${params.toString()}`);
+        renderStats(data);
+        grid.innerHTML = "";
+        if (!data.items.length) {
+          grid.innerHTML = "<div class='empty'>没有匹配的表情包</div>";
+          return;
+        }
+        data.items.forEach((item) => grid.appendChild(renderItem(item)));
+      }
+
+      refresh.addEventListener("click", load);
+      q.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") load();
+      });
+      status.addEventListener("change", load);
+      load().catch((err) => {
+        grid.innerHTML = `<div class='empty'>加载失败：${err.message}</div>`;
+      });
+    </script>
+  </body>
+</html>

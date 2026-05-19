@@ -1,0 +1,163 @@
+:root {
+  color-scheme: light;
+  font-family:
+    Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  background: #f7f7f5;
+  color: #202124;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid #deded8;
+  background: rgba(247, 247, 245, 0.96);
+  backdrop-filter: blur(10px);
+}
+
+h1 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+p {
+  margin: 6px 0 0;
+  color: #666a73;
+  font-size: 13px;
+}
+
+.filters {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+input,
+select,
+textarea,
+button {
+  border: 1px solid #cfcfc7;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #202124;
+  font: inherit;
+}
+
+input,
+select,
+textarea {
+  padding: 8px 10px;
+}
+
+textarea {
+  width: 100%;
+  min-height: 78px;
+  resize: vertical;
+}
+
+button {
+  min-height: 36px;
+  padding: 0 14px;
+  cursor: pointer;
+  background: #2f6f73;
+  border-color: #2f6f73;
+  color: #fff;
+}
+
+button.danger {
+  background: #a6423a;
+  border-color: #a6423a;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 20px 24px 32px;
+}
+
+.card {
+  overflow: hidden;
+  border: 1px solid #d9d9d2;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.preview {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  background: #ecece7;
+}
+
+.meta {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+label {
+  display: grid;
+  gap: 5px;
+  color: #555b62;
+  font-size: 13px;
+}
+
+label:has(input[type="checkbox"]) {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  color: #202124;
+}
+
+.meme-id {
+  font-size: 15px;
+}
+
+.use-count,
+.empty {
+  color: #666a73;
+  font-size: 13px;
+}
+
+.empty {
+  grid-column: 1 / -1;
+  padding: 28px;
+  border: 1px dashed #cfcfc7;
+  border-radius: 8px;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .topbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .filters {
+    display: grid;
+    grid-template-columns: 1fr 120px 72px;
+  }
+}
