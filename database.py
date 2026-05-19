@@ -82,17 +82,41 @@ class MemeDatabase:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = RLock()
-        self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
+        self._conn: sqlite3.Connection | None = None
+        self._closed = True
+        self._open()
         self.init_db()
 
     def close(self) -> None:
         with self._lock:
-            self._conn.close()
+            if self._conn is not None and not self._closed:
+                self._conn.close()
+            self._closed = True
+
+    def _open(self) -> sqlite3.Connection:
+        self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        self._conn.row_factory = sqlite3.Row
+        self._closed = False
+        return self._conn
+
+    def _conn_for_init(self) -> sqlite3.Connection:
+        if self._conn is None or self._closed:
+            return self._open()
+        return self._conn
+
+    def _conn_or_reopen(self) -> sqlite3.Connection:
+        """热重载后旧监听器可能短暂访问已关闭连接，自动重开避免刷屏报错。"""
+        if self._conn is None or self._closed:
+            conn = self._open()
+            self.init_db()
+            return conn
+        return self._conn
 
     def init_db(self) -> None:
-        with self._lock, self._conn:
-            self._conn.execute(
+        with self._lock:
+            conn = self._conn_for_init()
+            with conn:
+                conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS memes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -110,8 +134,8 @@ class MemeDatabase:
                     pending_review INTEGER NOT NULL DEFAULT 0
                 )
                 """
-            )
-            self._conn.execute(
+                )
+                conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS group_settings (
                     group_id TEXT PRIMARY KEY,
@@ -119,17 +143,18 @@ class MemeDatabase:
                     updated_at TEXT NOT NULL
                 )
                 """
-            )
-            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_memes_hash ON memes(hash)")
-            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_memes_created ON memes(created_at)")
-            self._migrate()
+                )
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_memes_hash ON memes(hash)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_memes_created ON memes(created_at)")
+                self._migrate()
 
     def _migrate(self) -> None:
+        conn = self._conn_for_init()
         columns = {
-            row["name"] for row in self._conn.execute("PRAGMA table_info(memes)").fetchall()
+            row["name"] for row in conn.execute("PRAGMA table_info(memes)").fetchall()
         }
         if "source_user_id" not in columns:
-            self._conn.execute("ALTER TABLE memes ADD COLUMN source_user_id TEXT DEFAULT NULL")
+            conn.execute("ALTER TABLE memes ADD COLUMN source_user_id TEXT DEFAULT NULL")
 
     def create_meme(
         self,
@@ -145,8 +170,10 @@ class MemeDatabase:
         enabled: bool = True,
     ) -> MemeRecord:
         now = utc_now_iso()
-        with self._lock, self._conn:
-            cursor = self._conn.execute(
+        with self._lock:
+            conn = self._conn_or_reopen()
+            with conn:
+                cursor = conn.execute(
                 """
                 INSERT INTO memes (
                     file_path, hash, description, tags, emotion, source_group_id,
@@ -167,17 +194,19 @@ class MemeDatabase:
                     int(enabled),
                     int(pending_review),
                 ),
-            )
+                )
             return self.get_meme(int(cursor.lastrowid))  # type: ignore[return-value]
 
     def get_meme(self, meme_id: int) -> MemeRecord | None:
         with self._lock:
-            row = self._conn.execute("SELECT * FROM memes WHERE id = ?", (meme_id,)).fetchone()
+            conn = self._conn_or_reopen()
+            row = conn.execute("SELECT * FROM memes WHERE id = ?", (meme_id,)).fetchone()
         return MemeRecord.from_row(row) if row else None
 
     def find_by_hash(self, hash_value: str) -> MemeRecord | None:
         with self._lock:
-            row = self._conn.execute("SELECT * FROM memes WHERE hash = ?", (hash_value,)).fetchone()
+            conn = self._conn_or_reopen()
+            row = conn.execute("SELECT * FROM memes WHERE hash = ?", (hash_value,)).fetchone()
         return MemeRecord.from_row(row) if row else None
 
     def list_memes(
@@ -206,12 +235,14 @@ class MemeDatabase:
         sql = f"SELECT * FROM memes {where} ORDER BY id DESC LIMIT ? OFFSET ?"
         params.extend([int(limit), int(offset)])
         with self._lock:
-            rows = self._conn.execute(sql, params).fetchall()
+            conn = self._conn_or_reopen()
+            rows = conn.execute(sql, params).fetchall()
         return [MemeRecord.from_row(row) for row in rows]
 
     def list_enabled(self, *, limit: int = 500) -> list[MemeRecord]:
         with self._lock:
-            rows = self._conn.execute(
+            conn = self._conn_or_reopen()
+            rows = conn.execute(
                 "SELECT * FROM memes WHERE enabled = 1 AND pending_review = 0 ORDER BY use_count ASC, id DESC LIMIT ?",
                 (int(limit),),
             ).fetchall()
@@ -250,26 +281,32 @@ class MemeDatabase:
         assignments.append("updated_at = ?")
         params.append(utc_now_iso())
         params.append(int(meme_id))
-        with self._lock, self._conn:
-            self._conn.execute(
-                f"UPDATE memes SET {', '.join(assignments)} WHERE id = ?",
-                params,
-            )
+        with self._lock:
+            conn = self._conn_or_reopen()
+            with conn:
+                conn.execute(
+                    f"UPDATE memes SET {', '.join(assignments)} WHERE id = ?",
+                    params,
+                )
         return self.get_meme(meme_id)
 
     def increment_use_count(self, meme_id: int) -> None:
-        with self._lock, self._conn:
-            self._conn.execute(
-                "UPDATE memes SET use_count = use_count + 1, updated_at = ? WHERE id = ?",
-                (utc_now_iso(), int(meme_id)),
-            )
+        with self._lock:
+            conn = self._conn_or_reopen()
+            with conn:
+                conn.execute(
+                    "UPDATE memes SET use_count = use_count + 1, updated_at = ? WHERE id = ?",
+                    (utc_now_iso(), int(meme_id)),
+                )
 
     def delete_meme(self, meme_id: int, *, delete_file: bool = True) -> bool:
         record = self.get_meme(meme_id)
         if not record:
             return False
-        with self._lock, self._conn:
-            self._conn.execute("DELETE FROM memes WHERE id = ?", (int(meme_id),))
+        with self._lock:
+            conn = self._conn_or_reopen()
+            with conn:
+                conn.execute("DELETE FROM memes WHERE id = ?", (int(meme_id),))
         if delete_file:
             try:
                 Path(record.file_path).unlink(missing_ok=True)
@@ -279,8 +316,10 @@ class MemeDatabase:
 
     def set_group_auto_reply(self, group_id: str, enabled: bool) -> None:
         now = utc_now_iso()
-        with self._lock, self._conn:
-            self._conn.execute(
+        with self._lock:
+            conn = self._conn_or_reopen()
+            with conn:
+                conn.execute(
                 """
                 INSERT INTO group_settings (group_id, auto_reply_enabled, updated_at)
                 VALUES (?, ?, ?)
@@ -289,11 +328,12 @@ class MemeDatabase:
                     updated_at = excluded.updated_at
                 """,
                 (str(group_id), int(enabled), now),
-            )
+                )
 
     def get_group_auto_reply(self, group_id: str) -> bool | None:
         with self._lock:
-            row = self._conn.execute(
+            conn = self._conn_or_reopen()
+            row = conn.execute(
                 "SELECT auto_reply_enabled FROM group_settings WHERE group_id = ?",
                 (str(group_id),),
             ).fetchone()
@@ -304,7 +344,8 @@ class MemeDatabase:
     def count_saved_today(self) -> int:
         today = datetime.now(timezone.utc).date().isoformat()
         with self._lock:
-            row = self._conn.execute(
+            conn = self._conn_or_reopen()
+            row = conn.execute(
                 "SELECT COUNT(*) AS c FROM memes WHERE substr(created_at, 1, 10) = ?",
                 (today,),
             ).fetchone()
@@ -312,7 +353,8 @@ class MemeDatabase:
 
     def stats(self) -> dict[str, int]:
         with self._lock:
-            row = self._conn.execute(
+            conn = self._conn_or_reopen()
+            row = conn.execute(
                 """
                 SELECT
                     COUNT(*) AS total,

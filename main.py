@@ -62,6 +62,7 @@ class MemeStealingPlugin(Star):
         self.tagger = MemeLLMTagger(context, self.config)
         self.matcher = KeywordMatcher(self.config.match_threshold)
         self.panel: PanelServer | None = None
+        self._terminated = False
 
         self.recent_images: dict[str, deque[RecentImage]] = defaultdict(
             lambda: deque(maxlen=self.config.recent_image_cache_size)
@@ -70,6 +71,7 @@ class MemeStealingPlugin(Star):
         self.reply_cooldown: dict[str, float] = {}
 
     async def initialize(self):
+        self._terminated = False
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.images_dir.mkdir(parents=True, exist_ok=True)
         if self.config.panel_enabled:
@@ -92,7 +94,7 @@ class MemeStealingPlugin(Star):
         说明：这里没有使用 @filter.command，是为了让 /meme_desc <id> <带空格描述>
         这类命令不受不同 AstrBot 版本参数解析差异影响。
         """
-        if not self.config.enabled:
+        if self._terminated or not self.config.enabled:
             return
         if self._is_from_self(event):
             return
@@ -135,6 +137,7 @@ class MemeStealingPlugin(Star):
         yield event.image_result(str(Path(match.record.file_path)))
 
     async def terminate(self):
+        self._terminated = True
         if self.panel:
             await self.panel.stop()
         self.db.close()
@@ -183,7 +186,7 @@ class MemeStealingPlugin(Star):
             return (
                 f"管理面板地址：{self.config.panel_url}\n"
                 f"{self.config.panel_access_hint}\n"
-                "请只在本机或可信局域网访问，不要暴露到公网。"
+                "允许公网访问时请务必使用强 token，并配合防火墙或反向代理限制访问来源。"
             )
         if command == "meme_stats":
             if not self._is_admin(event):

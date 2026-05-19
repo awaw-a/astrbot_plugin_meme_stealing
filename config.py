@@ -73,13 +73,14 @@ class MemeStealingConfig:
 
     @property
     def panel_url(self) -> str:
-        return f"http://{self.panel_host}:{self.panel_port}/?token={self.admin_token}"
+        host = "<服务器公网IP或域名>" if self.panel_host == "0.0.0.0" else self.panel_host
+        return f"http://{host}:{self.panel_port}/?token={self.admin_token}"
 
     @property
     def panel_access_hint(self) -> str:
         if self.panel_host == "0.0.0.0":
-            return "当前配置允许局域网访问，请用运行 AstrBot 机器的局域网 IP 打开面板。"
-        return "当前配置仅允许本机访问。"
+            return "当前配置允许公网访问：服务监听 0.0.0.0，请用服务器公网 IP 或域名打开面板，并确认端口已放行。"
+        return "当前配置仅限本机访问：服务只监听 127.0.0.1。"
 
 
 def normalize_str_list(value: Any) -> list[str]:
