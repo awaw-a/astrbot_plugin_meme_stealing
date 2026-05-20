@@ -51,6 +51,10 @@
             <label><input class="enabled" type="checkbox" /> 启用</label>
             <label><input class="pending" type="checkbox" /> 待审核</label>
           </div>
+          <div class="record-details">
+            <span class="group-id"></span>
+            <span class="created-at"></span>
+          </div>
           <label>
             描述
             <textarea class="description" rows="3"></textarea>
@@ -146,6 +150,13 @@
         return (value || []).join(",");
       }
 
+      function formatDate(value) {
+        if (!value) return "未知";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return value;
+        return date.toLocaleString();
+      }
+
       function renderStats(data) {
         const s = data.stats || data || {};
         stats.textContent = `总数 ${s.total || 0} / 启用 ${s.enabled || 0} / 待审核 ${s.pending_review || 0} / 今日保存 ${s.saved_today || 0}`;
@@ -159,6 +170,8 @@
         node.querySelector(".meme-id").textContent = `#${item.id}`;
         node.querySelector(".enabled").checked = item.enabled;
         node.querySelector(".pending").checked = item.pending_review;
+        node.querySelector(".group-id").textContent = `来源群聊：${item.source_group_id || "未知"}`;
+        node.querySelector(".created-at").textContent = `保存时间：${formatDate(item.created_at)}`;
         node.querySelector(".description").value = item.description || "";
         node.querySelector(".tags").value = listToCsv(item.tags);
         node.querySelector(".emotion").value = listToCsv(item.emotion);

@@ -3,7 +3,7 @@ display_name: 表情包偷取助手
 short_desc: 群聊表情包采集、LLM 标注、关键词自动回复和本地管理面板。
 desc: 在 QQ 群聊中随机或手动保存图片/表情包，调用多模态 LLM 生成描述和标签，并在合适聊天场景下自动发送匹配表情包。
 version: v0.1.0
-author: Codex
+author: awaw_a
 repo: ""
 astrbot_version: ">=4.16,<5"
 support_platforms:

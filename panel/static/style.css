@@ -161,6 +161,18 @@ button.secondary {
   padding: 12px;
 }
 
+.record-details {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid #e4e4de;
+  border-radius: 6px;
+  background: #f7f7f5;
+  color: #555b62;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .row {
   display: flex;
   gap: 10px;
