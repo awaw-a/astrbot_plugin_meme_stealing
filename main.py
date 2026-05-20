@@ -94,17 +94,22 @@ class MemeStealingPlugin(Star):
         说明：这里没有使用 @filter.command，是为了让 /meme_desc <id> <带空格描述>
         这类命令不受不同 AstrBot 版本参数解析差异影响。
         """
-        if self._terminated or not self.config.enabled:
+        if self._terminated:
+            return
+
+        text = (getattr(event, "message_str", "") or "").strip()
+        if not self.config.enabled:
+            if self._is_meme_command(text):
+                self._stop_event(event)
+                yield event.plain_result("插件当前已在配置中禁用，无法执行该指令。")
             return
         if self._is_from_self(event):
             return
 
-        text = (getattr(event, "message_str", "") or "").strip()
         if self._is_meme_command(text):
-            result_text = await self._handle_command(event, text)
+            result_text = await self._safe_handle_command(event, text)
             self._stop_event(event)
-            if result_text:
-                yield event.plain_result(result_text)
+            yield event.plain_result(result_text)
             return
 
         group_id = self._get_group_id(event)
@@ -193,6 +198,17 @@ class MemeStealingPlugin(Star):
                 return "没有权限。"
             return self._cmd_stats()
         return ""
+
+    async def _safe_handle_command(self, event: AstrMessageEvent, text: str) -> str:
+        command, _ = split_command(text)
+        try:
+            result = await self._handle_command(event, text)
+        except Exception as exc:
+            logger.error(f"meme stealing: 指令 {text} 执行失败: {exc}")
+            return f"指令执行失败：{exc}\n{command_usage(command)}"
+        if not result:
+            return f"指令没有产生结果，请检查用法。\n{command_usage(command)}"
+        return result
 
     async def _cmd_save(self, event: AstrMessageEvent, group_id: str, args: str) -> str:
         if not self._ensure_group(group_id):
@@ -440,6 +456,22 @@ def split_command(text: str) -> tuple[str, str]:
     command = parts[0].strip().lower()
     args = parts[1] if len(parts) > 1 else ""
     return command, args
+
+
+def command_usage(command: str) -> str:
+    usages = {
+        "meme_on": "用法：/meme_on，开启当前群自动表情回复。",
+        "meme_off": "用法：/meme_off，关闭当前群自动表情回复。",
+        "meme_save": "用法：回复图片后发送 /meme_save，或发送 /meme_save latest 保存最近一张图。",
+        "保存表情": "用法：回复图片后发送 /保存表情，或发送 /meme_save latest 保存最近一张图。",
+        "meme_list": "用法：/meme_list [数量]，列出最近保存的表情包。",
+        "meme_delete": "用法：/meme_delete <id>，删除指定表情包。",
+        "meme_desc": "用法：/meme_desc <id> <新描述>，修改描述。",
+        "meme_tags": "用法：/meme_tags <id> <tag1,tag2,tag3>，修改标签。",
+        "meme_panel": "用法：/meme_panel，获取管理面板地址。",
+        "meme_stats": "用法：/meme_stats，查看表情包统计。",
+    }
+    return usages.get(command, "可用指令：/meme_on、/meme_off、/meme_save latest、/meme_list、/meme_stats、/meme_panel")
 
 
 def parse_int_arg(args: str) -> int | None:
