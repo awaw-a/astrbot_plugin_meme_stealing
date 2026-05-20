@@ -100,16 +100,20 @@ class MemeStealingPlugin(Star):
         text = (getattr(event, "message_str", "") or "").strip()
         if not self.config.enabled:
             if self._is_meme_command(text):
+                result = event.plain_result("插件当前已在配置中禁用，无法执行该指令。")
+                if not await self._send_command_result(event, result):
+                    yield result
                 self._stop_event(event)
-                yield event.plain_result("插件当前已在配置中禁用，无法执行该指令。")
             return
         if self._is_from_self(event):
             return
 
         if self._is_meme_command(text):
             result_text = await self._safe_handle_command(event, text)
+            result = event.plain_result(result_text)
+            if not await self._send_command_result(event, result):
+                yield result
             self._stop_event(event)
-            yield event.plain_result(result_text)
             return
 
         group_id = self._get_group_id(event)
@@ -209,6 +213,18 @@ class MemeStealingPlugin(Star):
         if not result:
             return f"指令没有产生结果，请检查用法。\n{command_usage(command)}"
         return result
+
+    async def _send_command_result(self, event: AstrMessageEvent, result: Any) -> bool:
+        """优先主动发送指令反馈，避免 stop_event/管线阶段差异吞掉 yield 结果。"""
+        send = getattr(event, "send", None)
+        if not callable(send):
+            return False
+        try:
+            await send(result)
+            return True
+        except Exception as exc:
+            logger.warning(f"meme stealing: 主动发送指令反馈失败，将回退到 yield: {exc}")
+            return False
 
     async def _cmd_save(self, event: AstrMessageEvent, group_id: str, args: str) -> str:
         if not self._ensure_group(group_id):
@@ -422,7 +438,7 @@ class MemeStealingPlugin(Star):
 
     @staticmethod
     def _is_meme_command(text: str) -> bool:
-        if not text.startswith(("/", "／")):
+        if not text.strip():
             return False
         command, _ = split_command(text)
         return command in {
