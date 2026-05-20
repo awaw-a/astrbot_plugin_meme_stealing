@@ -30,6 +30,10 @@ class ImageAnalysis:
     is_meme: bool | None = None
     meme_confidence: float = 0.0
     meme_reason: str = ""
+    privacy_risk: bool = False
+    sexual_risk: bool = False
+    illegal_risk: bool = False
+    risk_reason: str = ""
     check_failed: bool = False
 
     def __post_init__(self) -> None:
@@ -114,6 +118,10 @@ class MemeLLMTagger:
             is_meme=parse_optional_bool(data.get("is_meme")),
             meme_confidence=clamp_float(data.get("meme_confidence"), 0.0, 1.0),
             meme_reason=str(data.get("meme_reason", "")).strip(),
+            privacy_risk=bool(parse_optional_bool(data.get("privacy_risk"))),
+            sexual_risk=bool(parse_optional_bool(data.get("sexual_risk"))),
+            illegal_risk=bool(parse_optional_bool(data.get("illegal_risk"))),
+            risk_reason=str(data.get("risk_reason", "")).strip(),
             check_failed=False,
         )
 
@@ -137,15 +145,18 @@ def build_prompt() -> str:
         "请分析这张群聊图片，先判断它是否应该作为“表情包/梗图/反应图/贴纸”保存，再生成适合自动匹配聊天场景的简短元数据。\n"
         "判定为表情包的标准：图片主要用于表达情绪、态度、吐槽、玩梗、幽默回应，包含常见表情包、贴纸、自定义表情、反应图、配字梗图、适合聊天回复的搞笑截图。\n"
         "判定为非表情包的标准：普通风景/自拍/生活照、文档/票据/二维码/广告、聊天记录截图、无明确情绪表达的普通图片、仅用于传递信息而非聊天回应的图片。\n"
+        "同时检查内容风险：如果图片可能泄露个人隐私，包含淫秽色情内容，或涉及诈骗、赌博、毒品、暴力犯罪、违法交易等其他可能违法内容，需要标记为待审核风险。\n"
         "要求：\n"
         "1. is_meme 输出 true 或 false。\n"
         "2. meme_confidence 输出 0 到 1 的数字，表示你对 is_meme 判定的置信度。\n"
         "3. meme_reason 用一句中文说明判定原因，20 字以内。\n"
-        "4. description 用一句中文描述图片内容和适用场景，30 字以内；非表情包也要简短描述。\n"
-        "5. tags 给出 3 到 8 个中文关键词，包含主体、梗点、动作或语境。\n"
-        "6. emotion 给出 1 到 4 个中文情绪/场景词，非表情包可为空数组。\n"
-        "7. 只输出 JSON 对象，不要解释，不要代码块。\n"
-        '示例：{"is_meme":true,"meme_confidence":0.92,"meme_reason":"猫表情可用于疑惑回应","description":"一只猫露出疑惑表情，适合表达不理解或震惊","tags":["疑惑","震惊","猫","不理解"],"emotion":["困惑","惊讶"]}'
+        "4. privacy_risk、sexual_risk、illegal_risk 分别输出 true 或 false。\n"
+        "5. risk_reason 如果存在任一风险，用一句中文说明原因，20 字以内；没有风险则为空字符串。\n"
+        "6. description 用一句中文描述图片内容和适用场景，30 字以内；非表情包也要简短描述。\n"
+        "7. tags 给出 3 到 8 个中文关键词，包含主体、梗点、动作或语境。\n"
+        "8. emotion 给出 1 到 4 个中文情绪/场景词，非表情包可为空数组。\n"
+        "9. 只输出 JSON 对象，不要解释，不要代码块。\n"
+        '示例：{"is_meme":true,"meme_confidence":0.92,"meme_reason":"猫表情可用于疑惑回应","privacy_risk":false,"sexual_risk":false,"illegal_risk":false,"risk_reason":"","description":"一只猫露出疑惑表情，适合表达不理解或震惊","tags":["疑惑","震惊","猫","不理解"],"emotion":["困惑","惊讶"]}'
     )
 
 

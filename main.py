@@ -100,7 +100,12 @@ class MemeStealingPlugin(Star):
         text = (getattr(event, "message_str", "") or "").strip()
         if not self.config.enabled:
             if self._is_meme_command(text):
-                result = event.plain_result("插件当前已在配置中禁用，无法执行该指令。")
+                message = (
+                    "插件当前已在配置中禁用，无法执行该指令。"
+                    if self._is_admin(event)
+                    else self._admin_denied_message()
+                )
+                result = event.plain_result(message)
                 if not await self._send_command_result(event, result):
                     yield result
                 self._stop_event(event)
@@ -154,42 +159,30 @@ class MemeStealingPlugin(Star):
     async def _handle_command(self, event: AstrMessageEvent, text: str) -> str:
         command, args = split_command(text)
         group_id = self._get_group_id(event)
+        if not self._is_admin(event):
+            return self._admin_denied_message()
 
         if command in {"meme_save", "保存表情"}:
             return await self._cmd_save(event, group_id, args)
         if command == "meme_on":
             if not self._ensure_group(group_id):
                 return "这个指令需要在群聊中使用。"
-            if not self._is_admin(event):
-                return "没有权限。"
             self.db.set_group_auto_reply(group_id, True)
             return "已开启当前群的自动表情回复。"
         if command == "meme_off":
             if not self._ensure_group(group_id):
                 return "这个指令需要在群聊中使用。"
-            if not self._is_admin(event):
-                return "没有权限。"
             self.db.set_group_auto_reply(group_id, False)
             return "已关闭当前群的自动表情回复。"
         if command == "meme_list":
-            if not self._is_admin(event):
-                return "没有权限。"
             return self._cmd_list(args)
         if command == "meme_delete":
-            if not self._is_admin(event):
-                return "没有权限。"
             return self._cmd_delete(args)
         if command == "meme_desc":
-            if not self._is_admin(event):
-                return "没有权限。"
             return self._cmd_desc(args)
         if command == "meme_tags":
-            if not self._is_admin(event):
-                return "没有权限。"
             return self._cmd_tags(args)
         if command == "meme_panel":
-            if not self._is_admin(event):
-                return "没有权限。"
             if not self.config.panel_enabled:
                 return "管理面板未启用，请在插件配置中开启 panel_enabled。"
             return (
@@ -198,8 +191,6 @@ class MemeStealingPlugin(Star):
                 "允许公网访问时请务必使用强 token，并配合防火墙或反向代理限制访问来源。"
             )
         if command == "meme_stats":
-            if not self._is_admin(event):
-                return "没有权限。"
             return self._cmd_stats()
         return ""
 
@@ -345,7 +336,13 @@ class MemeStealingPlugin(Star):
         description = analysis.description
         tags = analysis.tags or []
         emotion = analysis.emotion or []
-        pending_review = analysis.pending_review
+        sensitive_risk_reason = self._sensitive_risk_reason(analysis)
+        pending_review = analysis.pending_review or bool(sensitive_risk_reason)
+        if sensitive_risk_reason:
+            self._append_unique(tags, "内容待审核")
+            for label in self._sensitive_risk_labels(analysis):
+                self._append_unique(tags, label)
+            logger.info(f"meme stealing: 表情包进入待审核 {stored.hash[:12]}: {sensitive_risk_reason}")
         if not description and not pending_review:
             description = "未生成描述"
         source_user_id = self._get_sender_id(event) if self.config.store_sender_id else None
@@ -380,6 +377,36 @@ class MemeStealingPlugin(Star):
                 f"（{confidence:.2f} < {self.config.meme_filter_confidence_threshold:.2f}）"
             )
         return ""
+
+    @staticmethod
+    def _sensitive_risk_reason(analysis: Any) -> str:
+        reasons: list[str] = []
+        if getattr(analysis, "privacy_risk", False):
+            reasons.append("可能存在隐私泄露")
+        if getattr(analysis, "sexual_risk", False):
+            reasons.append("可能涉及淫秽色情内容")
+        if getattr(analysis, "illegal_risk", False):
+            reasons.append("可能涉及违法内容")
+        risk_reason = getattr(analysis, "risk_reason", "") or ""
+        if risk_reason:
+            reasons.append(risk_reason)
+        return "；".join(dict.fromkeys(reasons))
+
+    @staticmethod
+    def _sensitive_risk_labels(analysis: Any) -> list[str]:
+        labels: list[str] = []
+        if getattr(analysis, "privacy_risk", False):
+            labels.append("隐私风险")
+        if getattr(analysis, "sexual_risk", False):
+            labels.append("色情风险")
+        if getattr(analysis, "illegal_risk", False):
+            labels.append("违法风险")
+        return labels
+
+    @staticmethod
+    def _append_unique(items: list[str], value: str) -> None:
+        if value and value not in items:
+            items.append(value)
 
     def _remember_images(
         self,
@@ -426,8 +453,13 @@ class MemeStealingPlugin(Star):
 
     def _is_admin(self, event: AstrMessageEvent) -> bool:
         if not self.config.admin_users:
-            return True
+            return False
         return self._get_sender_id(event) in self.config.admin_users
+
+    def _admin_denied_message(self) -> str:
+        if not self.config.admin_users:
+            return "没有权限：尚未在插件配置 admin_users 中设置管理员 QQ 号。"
+        return "没有权限：只有插件管理员可以使用该指令。"
 
     def _get_group_id(self, event: AstrMessageEvent) -> str:
         try:

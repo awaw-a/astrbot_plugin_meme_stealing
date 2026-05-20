@@ -127,6 +127,11 @@ button.danger {
   border-color: #a6423a;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 button.secondary {
   background: #ffffff;
   border-color: #b8b8af;
@@ -198,6 +203,13 @@ label:has(input[type="checkbox"]) {
   font-size: 15px;
 }
 
+.select-label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: #202124;
+}
+
 .use-count,
 .empty {
   color: #666a73;
@@ -220,6 +232,6 @@ label:has(input[type="checkbox"]) {
 
   .filters {
     display: grid;
-    grid-template-columns: 1fr 120px 72px;
+    grid-template-columns: 1fr 120px;
   }
 }

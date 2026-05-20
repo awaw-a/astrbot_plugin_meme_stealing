@@ -32,7 +32,7 @@
   "max_images_per_day": {
     "description": "每日保存上限",
     "type": "int",
-    "default": 50,
+    "default": 30,
     "hint": "限制每天最多新增多少张表情包，防止图片库过快膨胀；设为 0 表示不限制。"
   },
   "image_max_size_mb": {
@@ -44,7 +44,7 @@
   "recent_image_cache_size": {
     "description": "最近图片缓存数量",
     "type": "int",
-    "default": 30,
+    "default": 10,
     "hint": "每个群在内存中记录最近 N 张图片，用于 /meme_save latest 保存最近一张图。"
   },
   "group_whitelist": {
@@ -62,7 +62,7 @@
   "auto_reply_cooldown_seconds": {
     "description": "自动回复冷却秒数",
     "type": "int",
-    "default": 120,
+    "default": 60,
     "hint": "同一群两次自动发送表情包之间至少间隔多少秒，避免刷屏。"
   },
   "auto_collect_cooldown_seconds": {
@@ -75,7 +75,7 @@
     "description": "管理员 QQ 号",
     "type": "list",
     "default": [],
-    "hint": "允许使用管理指令的 QQ 号列表；留空表示任何人都能使用管理指令，生产群建议填写。"
+    "hint": "允许使用本插件全部指令的 QQ 号列表。为避免误操作，留空时任何人都不能使用指令，请至少填写一个管理员 QQ 号。"
   },
   "admin_token": {
     "description": "管理面板 Token",

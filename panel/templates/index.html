@@ -35,6 +35,9 @@
           <option value="enabled">已启用</option>
           <option value="disabled">已禁用</option>
         </select>
+        <button id="select-all" class="secondary">全选</button>
+        <button id="clear-selection" class="secondary">清空选择</button>
+        <button id="batch-delete" class="danger">批量删除</button>
         <button id="refresh">刷新</button>
         <button id="logout" class="secondary">更换 Token</button>
       </div>
@@ -47,7 +50,7 @@
         <img class="preview" alt="表情包预览" />
         <div class="meta">
           <div class="row">
-            <strong class="meme-id"></strong>
+            <label class="select-label"><input class="select-meme" type="checkbox" /> <strong class="meme-id"></strong></label>
             <label><input class="enabled" type="checkbox" /> 启用</label>
             <label><input class="pending" type="checkbox" /> 待审核</label>
           </div>
@@ -88,6 +91,9 @@
       const stats = document.querySelector("#stats");
       const q = document.querySelector("#q");
       const status = document.querySelector("#status");
+      const selectAll = document.querySelector("#select-all");
+      const clearSelection = document.querySelector("#clear-selection");
+      const batchDelete = document.querySelector("#batch-delete");
       const refresh = document.querySelector("#refresh");
       const logout = document.querySelector("#logout");
       const tmpl = document.querySelector("#card-template");
@@ -159,7 +165,20 @@
 
       function renderStats(data) {
         const s = data.stats || data || {};
-        stats.textContent = `总数 ${s.total || 0} / 启用 ${s.enabled || 0} / 待审核 ${s.pending_review || 0} / 今日保存 ${s.saved_today || 0}`;
+        const selected = selectedIds().length;
+        stats.textContent = `总数 ${s.total || 0} / 启用 ${s.enabled || 0} / 待审核 ${s.pending_review || 0} / 今日保存 ${s.saved_today || 0} / 已选择 ${selected}`;
+      }
+
+      function selectedIds() {
+        return Array.from(document.querySelectorAll(".select-meme:checked"))
+          .map((input) => Number(input.closest(".card").dataset.id))
+          .filter(Boolean);
+      }
+
+      function updateSelectionStats() {
+        const selected = selectedIds().length;
+        const base = stats.textContent.replace(/ \/ 已选择 \d+$/, "");
+        stats.textContent = `${base} / 已选择 ${selected}`;
       }
 
       function renderItem(item) {
@@ -168,6 +187,7 @@
         card.dataset.id = item.id;
         node.querySelector(".preview").src = withToken(`/images/${item.id}`);
         node.querySelector(".meme-id").textContent = `#${item.id}`;
+        node.querySelector(".select-meme").addEventListener("change", updateSelectionStats);
         node.querySelector(".enabled").checked = item.enabled;
         node.querySelector(".pending").checked = item.pending_review;
         node.querySelector(".group-id").textContent = `来源群聊：${item.source_group_id || "未知"}`;
@@ -230,6 +250,31 @@
 
       refresh.addEventListener("click", () => {
         load().catch((err) => showAuth(err.message));
+      });
+      selectAll.addEventListener("click", () => {
+        document.querySelectorAll(".select-meme").forEach((input) => {
+          input.checked = true;
+        });
+        updateSelectionStats();
+      });
+      clearSelection.addEventListener("click", () => {
+        document.querySelectorAll(".select-meme").forEach((input) => {
+          input.checked = false;
+        });
+        updateSelectionStats();
+      });
+      batchDelete.addEventListener("click", async () => {
+        const ids = selectedIds();
+        if (!ids.length) {
+          alert("请先选择要删除的表情包。");
+          return;
+        }
+        if (!confirm(`确定删除已选择的 ${ids.length} 张表情包？`)) return;
+        await request("/api/memes/batch-delete", {
+          method: "POST",
+          body: JSON.stringify({ ids }),
+        });
+        await load();
       });
       q.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {

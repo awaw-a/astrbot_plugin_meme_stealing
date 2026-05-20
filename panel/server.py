@@ -28,6 +28,10 @@ class MemeUpdate(BaseModel):  # type: ignore[misc]
     pending_review: bool | None = None
 
 
+class MemeBatchDelete(BaseModel):  # type: ignore[misc]
+    ids: list[int]
+
+
 class PanelServer:
     def __init__(self, db: MemeDatabase, host: str, port: int, token: str):
         self.db = db
@@ -142,6 +146,20 @@ def create_app(db: MemeDatabase, token: str):
         if not db.delete_meme(meme_id):
             raise HTTPException(status_code=404, detail="not found")
         return JSONResponse({"ok": True})
+
+    @app.post("/api/memes/batch-delete")
+    async def batch_delete_meme(payload: MemeBatchDelete, _: None = Depends(require_token)):
+        ids = sorted({int(item) for item in payload.ids if int(item) > 0})
+        if not ids:
+            raise HTTPException(status_code=400, detail="empty ids")
+        deleted: list[int] = []
+        missing: list[int] = []
+        for meme_id in ids:
+            if db.delete_meme(meme_id):
+                deleted.append(meme_id)
+            else:
+                missing.append(meme_id)
+        return {"ok": True, "deleted": deleted, "missing": missing}
 
     @app.get("/images/{meme_id}")
     async def image(meme_id: int, _: None = Depends(require_token)):
