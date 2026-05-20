@@ -58,6 +58,7 @@ http://127.0.0.1:8756/?token=<admin_token>
 ```
 
 面板功能包括图片预览、搜索、编辑 description/tags/emotion、启用/禁用、待审核状态和删除。
+直接打开面板地址时会显示身份校验窗口，输入插件配置里的 `admin_token` 后才能加载数据；也可以继续使用带 `?token=` 的地址自动校验。
 
 `panel_host` 可选：
 

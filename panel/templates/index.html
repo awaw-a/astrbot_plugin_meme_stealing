@@ -4,18 +4,28 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>表情包管理</title>
-    <script>
-      window.ADMIN_TOKEN = new URLSearchParams(location.search).get("token") || "";
-      document.write(
-        `<link rel="stylesheet" href="/static/style.css?token=${encodeURIComponent(window.ADMIN_TOKEN)}" />`
-      );
-    </script>
+    <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
+    <div id="auth-mask" class="auth-mask" hidden>
+      <section class="auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+        <h2 id="auth-title">身份校验</h2>
+        <p>请输入插件配置中的管理面板 Token。</p>
+        <form id="auth-form">
+          <label>
+            管理 Token
+            <input id="token-input" type="password" autocomplete="current-password" placeholder="输入 admin_token" />
+          </label>
+          <div id="auth-error" class="auth-error" aria-live="polite"></div>
+          <button type="submit">进入管理面板</button>
+        </form>
+      </section>
+    </div>
+
     <header class="topbar">
       <div>
         <h1>表情包管理</h1>
-        <p id="stats">加载中...</p>
+        <p id="stats">等待身份校验...</p>
       </div>
       <div class="filters">
         <input id="q" type="search" placeholder="搜索描述、标签、hash" />
@@ -26,6 +36,7 @@
           <option value="disabled">已禁用</option>
         </select>
         <button id="refresh">刷新</button>
+        <button id="logout" class="secondary">更换 Token</button>
       </div>
     </header>
 
@@ -62,12 +73,19 @@
     </template>
 
     <script>
-      const token = window.ADMIN_TOKEN;
+      const TOKEN_STORAGE_KEY = "astrbot_meme_panel_token";
+      let token = new URLSearchParams(location.search).get("token") || localStorage.getItem(TOKEN_STORAGE_KEY) || "";
+
+      const authMask = document.querySelector("#auth-mask");
+      const authForm = document.querySelector("#auth-form");
+      const tokenInput = document.querySelector("#token-input");
+      const authError = document.querySelector("#auth-error");
       const grid = document.querySelector("#grid");
       const stats = document.querySelector("#stats");
       const q = document.querySelector("#q");
       const status = document.querySelector("#status");
       const refresh = document.querySelector("#refresh");
+      const logout = document.querySelector("#logout");
       const tmpl = document.querySelector("#card-template");
 
       function withToken(path) {
@@ -84,8 +102,37 @@
             ...(options.headers || {}),
           },
         });
-        if (!res.ok) throw new Error(await res.text());
+        if (res.status === 401) {
+          throw new Error("Token 无效，请重新输入。");
+        }
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
         return res.json();
+      }
+
+      function showAuth(message = "") {
+        authError.textContent = message;
+        authMask.hidden = false;
+        tokenInput.value = token || "";
+        setTimeout(() => tokenInput.focus(), 0);
+      }
+
+      function hideAuth() {
+        authMask.hidden = true;
+        authError.textContent = "";
+      }
+
+      async function validateToken(candidate) {
+        token = candidate.trim();
+        if (!token) {
+          throw new Error("请输入 Token。");
+        }
+        await request("/api/stats");
+        localStorage.setItem(TOKEN_STORAGE_KEY, token);
+        const url = new URL(location.href);
+        url.searchParams.delete("token");
+        history.replaceState(null, "", url.toString());
       }
 
       function csvToList(value) {
@@ -100,7 +147,7 @@
       }
 
       function renderStats(data) {
-        const s = data.stats || {};
+        const s = data.stats || data || {};
         stats.textContent = `总数 ${s.total || 0} / 启用 ${s.enabled || 0} / 待审核 ${s.pending_review || 0} / 今日保存 ${s.saved_today || 0}`;
       }
 
@@ -156,14 +203,53 @@
         data.items.forEach((item) => grid.appendChild(renderItem(item)));
       }
 
-      refresh.addEventListener("click", load);
+      authForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        authError.textContent = "";
+        try {
+          await validateToken(tokenInput.value);
+          hideAuth();
+          await load();
+        } catch (err) {
+          showAuth(err.message || "Token 校验失败。");
+        }
+      });
+
+      refresh.addEventListener("click", () => {
+        load().catch((err) => showAuth(err.message));
+      });
       q.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") load();
+        if (event.key === "Enter") {
+          load().catch((err) => showAuth(err.message));
+        }
       });
-      status.addEventListener("change", load);
-      load().catch((err) => {
-        grid.innerHTML = `<div class='empty'>加载失败：${err.message}</div>`;
+      status.addEventListener("change", () => {
+        load().catch((err) => showAuth(err.message));
       });
+      logout.addEventListener("click", () => {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+        token = "";
+        grid.innerHTML = "";
+        stats.textContent = "等待身份校验...";
+        showAuth();
+      });
+
+      async function boot() {
+        if (!token) {
+          showAuth();
+          return;
+        }
+        try {
+          await validateToken(token);
+          hideAuth();
+          await load();
+        } catch (err) {
+          localStorage.removeItem(TOKEN_STORAGE_KEY);
+          showAuth(err.message || "Token 校验失败。");
+        }
+      }
+
+      boot();
     </script>
   </body>
 </html>

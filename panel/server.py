@@ -85,12 +85,12 @@ def create_app(db: MemeDatabase, token: str):
         request.state.token = supplied
 
     @app.get("/", response_class=HTMLResponse)
-    async def index(_: None = Depends(require_token)):
+    async def index():
         html = template_path.read_text(encoding="utf-8")
         return HTMLResponse(html)
 
     @app.get("/static/style.css")
-    async def css(_: None = Depends(require_token)):
+    async def css():
         return FileResponse(style_path, media_type="text/css")
 
     @app.get("/api/memes")
