@@ -30,6 +30,9 @@ class MemeStealingConfig:
     llm_provider: str = ""
     llm_min_interval_seconds: float = 6.0
     pending_review_when_llm_failed: bool = True
+    meme_filter_enabled: bool = True
+    meme_filter_confidence_threshold: float = 0.6
+    save_when_meme_filter_failed: bool = False
     match_threshold: float = 1.0
     store_sender_id: bool = False
 
@@ -53,6 +56,9 @@ class MemeStealingConfig:
         values["panel_host"] = normalize_panel_host(values["panel_host"])
         values["panel_port"] = int(values["panel_port"])
         values["llm_min_interval_seconds"] = max(float(values["llm_min_interval_seconds"]), 0.0)
+        values["meme_filter_confidence_threshold"] = clamp_float(
+            values["meme_filter_confidence_threshold"], 0.0, 1.0
+        )
         values["match_threshold"] = max(float(values["match_threshold"]), 0.0)
         values["group_whitelist"] = normalize_str_list(values["group_whitelist"])
         values["group_blacklist"] = normalize_str_list(values["group_blacklist"])

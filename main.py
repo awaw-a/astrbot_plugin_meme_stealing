@@ -328,10 +328,24 @@ class MemeStealingPlugin(Star):
         if existing:
             return existing, True, ""
 
-        description, tags, emotion, pending_review = await self.tagger.describe_image(
+        analysis = await self.tagger.analyze_image(
             stored.file_path,
             umo=getattr(event, "unified_msg_origin", None),
         )
+
+        reject_reason = self._meme_reject_reason(analysis)
+        if reject_reason:
+            try:
+                stored.file_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            logger.info(f"meme stealing: 跳过非表情包图片 {stored.hash[:12]}: {reject_reason}")
+            return None, False, reject_reason
+
+        description = analysis.description
+        tags = analysis.tags or []
+        emotion = analysis.emotion or []
+        pending_review = analysis.pending_review
         if not description and not pending_review:
             description = "未生成描述"
         source_user_id = self._get_sender_id(event) if self.config.store_sender_id else None
@@ -347,6 +361,25 @@ class MemeStealingPlugin(Star):
             enabled=True,
         )
         return record, False, ""
+
+    def _meme_reject_reason(self, analysis: Any) -> str:
+        if not self.config.meme_filter_enabled:
+            return ""
+        if getattr(analysis, "check_failed", False):
+            if self.config.save_when_meme_filter_failed:
+                return ""
+            return f"无法完成表情包判定：{analysis.meme_reason or 'LLM 判定失败'}"
+
+        confidence = float(getattr(analysis, "meme_confidence", 0.0) or 0.0)
+        reason = getattr(analysis, "meme_reason", "") or "图片更像普通图片或信息图片"
+        if getattr(analysis, "is_meme", None) is not True:
+            return f"判定不是表情包：{reason}（置信度 {confidence:.2f}）"
+        if confidence < self.config.meme_filter_confidence_threshold:
+            return (
+                f"表情包判定置信度过低：{reason}"
+                f"（{confidence:.2f} < {self.config.meme_filter_confidence_threshold:.2f}）"
+            )
+        return ""
 
     def _remember_images(
         self,
