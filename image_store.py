@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import inspect
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -34,7 +35,7 @@ class ImageStore:
         self.image_dir.mkdir(parents=True, exist_ok=True)
 
     async def save_candidate(self, candidate: ImageCandidate) -> StoredImage:
-        data, suffix = await load_image_bytes(candidate.source, self.max_bytes)
+        data, suffix = await load_candidate_image_bytes(candidate, self.max_bytes)
         if not data:
             raise ValueError("图片内容为空")
         if len(data) > self.max_bytes:
@@ -119,7 +120,7 @@ def extract_image_from_component(component: Any) -> list[ImageCandidate]:
         return []
 
     values: list[tuple[Any, str]] = []
-    for attr in ("url", "file", "path", "file_path", "data", "base64"):
+    for attr in ("url", "path", "file_path", "file", "data", "base64"):
         value = getattr(component, attr, None)
         if callable(value):
             continue
@@ -130,6 +131,8 @@ def extract_image_from_component(component: Any) -> list[ImageCandidate]:
         ImageCandidate(source=value, source_type=guess_source_type(value, hint), component=component)
         for value, hint in values
     ]
+    if not candidates and has_component_converter(component):
+        candidates.append(ImageCandidate(source=component, source_type="component", component=component))
     return candidates
 
 
@@ -142,7 +145,7 @@ def extract_images_from_raw(raw: Any) -> list[ImageCandidate]:
         raw_type = str(raw.get("type") or raw.get("post_type") or "").lower()
         data = raw.get("data") if isinstance(raw.get("data"), dict) else raw
         if raw_type == "image" or raw.get("type") == "image":
-            for key in ("url", "file", "path", "file_path", "data", "base64"):
+            for key in ("url", "path", "file_path", "file", "data", "base64"):
                 value = data.get(key) if isinstance(data, dict) else None
                 if value:
                     candidates.append(ImageCandidate(value, guess_source_type(value, key)))
@@ -196,6 +199,56 @@ def guess_source_type(value: Any, hint: str = "") -> str:
     if text.startswith(("base64://", "data:image/")) or hint == "base64":
         return "base64"
     return "file"
+
+
+async def load_candidate_image_bytes(candidate: ImageCandidate, max_bytes: int) -> tuple[bytes, str]:
+    if candidate.source_type == "component" or candidate.component is not None:
+        try:
+            return await load_component_image_bytes(candidate.component or candidate.source, max_bytes)
+        except ValueError:
+            if candidate.source_type == "component":
+                raise
+
+    try:
+        return await load_image_bytes(candidate.source, max_bytes)
+    except ValueError as exc:
+        if candidate.component is not None:
+            try:
+                return await load_component_image_bytes(candidate.component, max_bytes)
+            except ValueError:
+                pass
+        raise ValueError(f"{exc}；来源字段={candidate.source_type}:{short_source(candidate.source)}") from exc
+
+
+async def load_component_image_bytes(component: Any, max_bytes: int) -> tuple[bytes, str]:
+    if component is None:
+        raise ValueError("图片组件为空")
+
+    convert_to_file_path = getattr(component, "convert_to_file_path", None)
+    if callable(convert_to_file_path):
+        path = await maybe_await(convert_to_file_path())
+        if path:
+            return await load_image_bytes(path, max_bytes)
+
+    convert_to_base64 = getattr(component, "convert_to_base64", None)
+    if callable(convert_to_base64):
+        raw_base64 = await maybe_await(convert_to_base64())
+        if raw_base64:
+            payload = str(raw_base64)
+            if not payload.startswith(("base64://", "data:image/")):
+                payload = f"base64://{payload}"
+            data, suffix = decode_base64_image(payload)
+            if len(data) > max_bytes:
+                raise ValueError("图片超过大小限制")
+            return data, suffix
+
+    raise ValueError("图片组件没有可用的 convert_to_file_path/convert_to_base64 方法")
+
+
+async def maybe_await(value: Any) -> Any:
+    if inspect.isawaitable(value):
+        return await value
+    return value
 
 
 async def load_image_bytes(source: Any, max_bytes: int) -> tuple[bytes, str]:
@@ -307,3 +360,17 @@ def suffix_from_content_type(content_type: str | None) -> str:
         "image/webp": ".webp",
         "image/bmp": ".bmp",
     }.get(media_type, "")
+
+
+def has_component_converter(component: Any) -> bool:
+    return callable(getattr(component, "convert_to_file_path", None)) or callable(
+        getattr(component, "convert_to_base64", None)
+    )
+
+
+def short_source(source: Any) -> str:
+    text = str(source)
+    text = text.replace("\n", "\\n")
+    if len(text) > 120:
+        return text[:117] + "..."
+    return text
