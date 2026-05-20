@@ -12,7 +12,7 @@ QQ群表情包采集与自动回复插件。插件会按配置概率保存群友
 - 通过已配置 provider 的 `text_chat(..., image_urls=[...])` 调用多模态 LLM。
 - 保存前会先判断图片是否像表情包/贴纸/梗图/反应图，普通照片、文档、二维码、广告等会被跳过。
 - 关键词匹配自动发送，支持 `/meme_on`、`/meme_off` 按群开关。
-- 本地 FastAPI 管理面板，默认 `127.0.0.1` 仅限本机访问；配置为 `0.0.0.0` 时允许公网访问；所有访问都需要 `admin_token` 鉴权。
+- 本地 FastAPI 管理面板，默认 `127.0.0.1` 仅限本机访问；配置为 `0.0.0.0` 时允许公网访问；数据 API 和图片访问需要 `admin_token` 鉴权。
 
 ## 安装
 
@@ -68,10 +68,10 @@ http://127.0.0.1:8756/?token=<admin_token>
 
 公网访问风险更高，务必修改 `admin_token`，并建议配合防火墙白名单、VPN 或反向代理鉴权使用。
 
-也可以单独运行面板：
+也可以单独运行面板。请把 `--db` 改成实际的 `memes.sqlite3` 路径；在 AstrBot 中通常位于 `data/plugin_data/astrbot_plugin_meme_stealing/memes.sqlite3`：
 
 ```bash
-python -m panel.server --db data/plugin_data/astrbot_plugin_meme_stealing/memes.sqlite3 --token change-me
+python -m panel.server --db /path/to/AstrBot/data/plugin_data/astrbot_plugin_meme_stealing/memes.sqlite3 --token change-me
 ```
 
 ## 数据与隐私
@@ -88,6 +88,6 @@ python -m panel.server --db data/plugin_data/astrbot_plugin_meme_stealing/memes.
 
 - 事件监听基于 `@filter.event_message_type(filter.EventMessageType.ALL)`。
 - 发送图片使用 `event.image_result(path)`。
-- LLM 标注使用 AstrBot Provider 的 `text_chat(..., image_urls=[本地图片路径])`。若你的 AstrBot 版本 provider 签名不同，请调整 `llm.py` 的 `describe_image()`。
+- LLM 标注使用 AstrBot Provider 的 `text_chat(..., image_urls=[本地图片路径])`。若你的 AstrBot 版本 provider 签名不同，请调整 `llm.py` 的 `analyze_image()` 中 provider 调用部分。
 - 图片接收字段在不同适配器中可能是 `url`、`file`、`path`、base64 或 raw message dict。若某个 QQ 协议端取不到图片，请在 `image_store.py` 的 `extract_image_from_component()` 中补充对应字段。
 - 回复消息强制保存依赖适配器是否提供被回复消息内容；否则使用 `/meme_save latest`。
