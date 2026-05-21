@@ -12,7 +12,12 @@ from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.star import Context, Star, register
 
 try:
-    from .config import PLUGIN_NAME, MemeStealingConfig, get_plugin_data_dir, normalize_str_list
+    from .config import (
+        PLUGIN_NAME,
+        MemeStealingConfig,
+        get_plugin_data_dir,
+        normalize_str_list,
+    )
     from .database import MemeDatabase, MemeRecord
     from .image_store import (
         ImageCandidate,
@@ -24,7 +29,12 @@ try:
     from .matcher import KeywordMatcher
     from .panel.server import PanelServer
 except ImportError:
-    from config import PLUGIN_NAME, MemeStealingConfig, get_plugin_data_dir, normalize_str_list
+    from config import (
+        PLUGIN_NAME,
+        MemeStealingConfig,
+        get_plugin_data_dir,
+        normalize_str_list,
+    )
     from database import MemeDatabase, MemeRecord
     from image_store import (
         ImageCandidate,
@@ -129,8 +139,11 @@ class MemeStealingPlugin(Star):
         if candidates:
             self._remember_images(event, group_id, candidates)
             if self._should_auto_collect(group_id):
-                await self._save_candidate(event, candidates[0], group_id=group_id, force=True)
-                self.collect_cooldown[group_id] = time.time()
+                attempted = await self._auto_collect_candidates(
+                    event, candidates, group_id=group_id
+                )
+                if attempted:
+                    self.collect_cooldown[group_id] = time.time()
 
         if not text or self._looks_like_command(text):
             return
@@ -139,7 +152,9 @@ class MemeStealingPlugin(Star):
             return
         if random.random() > self.config.auto_reply_probability:
             return
-        if not self._cooldown_ready(self.reply_cooldown, group_id, self.config.auto_reply_cooldown_seconds):
+        if not self._cooldown_ready(
+            self.reply_cooldown, group_id, self.config.auto_reply_cooldown_seconds
+        ):
             return
 
         match = self.matcher.choose(text, self.db.list_enabled())
@@ -214,7 +229,9 @@ class MemeStealingPlugin(Star):
             await send(result)
             return True
         except Exception as exc:
-            logger.warning(f"meme stealing: 主动发送指令反馈失败，将回退到 yield: {exc}")
+            logger.warning(
+                f"meme stealing: 主动发送指令反馈失败，将回退到 yield: {exc}"
+            )
             return False
 
     async def _cmd_save(self, event: AstrMessageEvent, group_id: str, args: str) -> str:
@@ -259,8 +276,14 @@ class MemeStealingPlugin(Star):
         lines = ["最近保存的表情包："]
         for record in records:
             tags = ",".join(record.tags[:5]) or "无标签"
-            status = "待审核" if record.pending_review else ("启用" if record.enabled else "禁用")
-            lines.append(f"#{record.id} [{status}] {record.description or '无描述'} | {tags}")
+            status = (
+                "待审核"
+                if record.pending_review
+                else ("启用" if record.enabled else "禁用")
+            )
+            lines.append(
+                f"#{record.id} [{status}] {record.description or '无描述'} | {tags}"
+            )
         return "\n".join(lines)
 
     def _cmd_delete(self, args: str) -> str:
@@ -275,7 +298,9 @@ class MemeStealingPlugin(Star):
         parts = args.strip().split(maxsplit=1)
         if len(parts) < 2 or not parts[0].isdigit():
             return "用法：/meme_desc <id> <新描述>"
-        record = self.db.update_meme(int(parts[0]), description=parts[1].strip(), pending_review=False)
+        record = self.db.update_meme(
+            int(parts[0]), description=parts[1].strip(), pending_review=False
+        )
         if not record:
             return f"未找到 #{parts[0]}。"
         return f"已更新 #{record.id} 描述。"
@@ -330,7 +355,9 @@ class MemeStealingPlugin(Star):
                 stored.file_path.unlink(missing_ok=True)
             except OSError:
                 pass
-            logger.info(f"meme stealing: 跳过非表情包图片 {stored.hash[:12]}: {reject_reason}")
+            logger.info(
+                f"meme stealing: 跳过非表情包图片 {stored.hash[:12]}: {reject_reason}"
+            )
             return None, False, reject_reason
 
         description = analysis.description
@@ -342,10 +369,14 @@ class MemeStealingPlugin(Star):
             self._append_unique(tags, "内容待审核")
             for label in self._sensitive_risk_labels(analysis):
                 self._append_unique(tags, label)
-            logger.info(f"meme stealing: 表情包进入待审核 {stored.hash[:12]}: {sensitive_risk_reason}")
+            logger.info(
+                f"meme stealing: 表情包进入待审核 {stored.hash[:12]}: {sensitive_risk_reason}"
+            )
         if not description and not pending_review:
             description = "未生成描述"
-        source_user_id = self._get_sender_id(event) if self.config.store_sender_id else None
+        source_user_id = (
+            self._get_sender_id(event) if self.config.store_sender_id else None
+        )
         record = self.db.create_meme(
             file_path=str(stored.file_path),
             hash_value=stored.hash,
@@ -358,6 +389,41 @@ class MemeStealingPlugin(Star):
             enabled=True,
         )
         return record, False, ""
+
+    async def _auto_collect_candidates(
+        self,
+        event: AstrMessageEvent,
+        candidates: list[ImageCandidate],
+        *,
+        group_id: str,
+    ) -> bool:
+        """自动采集时依次尝试多个图片来源，避免适配器的 file 字段只是文件 ID。"""
+        errors: list[str] = []
+        for candidate in sorted(candidates, key=self._candidate_priority):
+            record, duplicate, error = await self._save_candidate(
+                event,
+                candidate,
+                group_id=group_id,
+                force=False,
+            )
+            if record:
+                state = "重复图片" if duplicate else "保存成功"
+                logger.info(
+                    f"meme stealing: 自动采集{state} #{record.id} group={group_id}"
+                )
+                return True
+            if not error:
+                continue
+            errors.append(error)
+            if not self._is_candidate_source_error(error):
+                logger.info(f"meme stealing: 自动采集跳过图片: {error}")
+                return True
+
+        if errors:
+            logger.warning(
+                f"meme stealing: 自动采集图片失败，已尝试 {len(errors)} 个候选来源: {errors[-1]}"
+            )
+        return False
 
     def _meme_reject_reason(self, analysis: Any) -> str:
         if not self.config.meme_filter_enabled:
@@ -408,13 +474,46 @@ class MemeStealingPlugin(Star):
         if value and value not in items:
             items.append(value)
 
+    @staticmethod
+    def _candidate_priority(candidate: ImageCandidate) -> int:
+        if candidate.source_type == "bytes":
+            return 0
+        if candidate.source_type == "base64":
+            return 1
+        if candidate.source_type == "url":
+            return 2
+        if candidate.component is not None and (
+            callable(getattr(candidate.component, "convert_to_file_path", None))
+            or callable(getattr(candidate.component, "convert_to_base64", None))
+        ):
+            return 3
+        if candidate.source_type == "component":
+            return 4
+        return 5
+
+    @staticmethod
+    def _is_candidate_source_error(error: str) -> bool:
+        return any(
+            marker in error
+            for marker in (
+                "图片内容为空",
+                "图片超过大小限制",
+                "无法识别图片来源",
+                "图片组件没有可用",
+                "图片下载失败",
+                "来源字段",
+            )
+        )
+
     def _remember_images(
         self,
         event: AstrMessageEvent,
         group_id: str,
         candidates: list[ImageCandidate],
     ) -> None:
-        message_id = str(getattr(getattr(event, "message_obj", None), "message_id", "") or "")
+        message_id = str(
+            getattr(getattr(event, "message_obj", None), "message_id", "") or ""
+        )
         for candidate in candidates:
             candidate.message_id = message_id
             self.recent_images[group_id].append(
@@ -441,7 +540,10 @@ class MemeStealingPlugin(Star):
             self.config.auto_collect_cooldown_seconds,
         ):
             return False
-        if self.config.max_images_per_day and self.db.count_saved_today() >= self.config.max_images_per_day:
+        if (
+            self.config.max_images_per_day
+            and self.db.count_saved_today() >= self.config.max_images_per_day
+        ):
             return False
         return random.random() < self.config.collect_probability
 
@@ -552,7 +654,10 @@ def command_usage(command: str) -> str:
         "meme_panel": "用法：/meme_panel，获取管理面板地址。",
         "meme_stats": "用法：/meme_stats，查看表情包统计。",
     }
-    return usages.get(command, "可用指令：/meme_on、/meme_off、/meme_save latest、/meme_list、/meme_stats、/meme_panel")
+    return usages.get(
+        command,
+        "可用指令：/meme_on、/meme_off、/meme_save latest、/meme_list、/meme_stats、/meme_panel",
+    )
 
 
 def parse_int_arg(args: str) -> int | None:
