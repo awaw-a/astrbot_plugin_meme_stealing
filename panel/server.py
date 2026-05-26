@@ -54,7 +54,9 @@ class PanelServer:
         import uvicorn
 
         app = create_app(self.db, self.token)
-        config = uvicorn.Config(app, host=self.host, port=self.port, log_level="warning")
+        config = uvicorn.Config(
+            app, host=self.host, port=self.port, log_level="warning"
+        )
         self._server = uvicorn.Server(config)
         self._thread = Thread(target=self._server.run, name="meme-panel", daemon=True)
         self._thread.start()
@@ -121,14 +123,20 @@ def create_app(db: MemeDatabase, token: str):
             limit=min(max(limit, 1), 200),
             offset=max(offset, 0),
         )
-        return {"items": [record.to_dict() for record in records], "stats": db.stats()}
+        return {
+            "items": [record.to_dict() for record in records],
+            "stats": db.stats(),
+            "has_more": len(records) >= min(max(limit, 1), 200),
+        }
 
     @app.get("/api/stats")
     async def stats(_: None = Depends(require_token)):
         return db.stats()
 
     @app.patch("/api/memes/{meme_id}")
-    async def update_meme(meme_id: int, payload: MemeUpdate, _: None = Depends(require_token)):
+    async def update_meme(
+        meme_id: int, payload: MemeUpdate, _: None = Depends(require_token)
+    ):
         record = db.update_meme(
             meme_id,
             description=payload.description,
@@ -148,7 +156,9 @@ def create_app(db: MemeDatabase, token: str):
         return JSONResponse({"ok": True})
 
     @app.post("/api/memes/batch-delete")
-    async def batch_delete_meme(payload: MemeBatchDelete, _: None = Depends(require_token)):
+    async def batch_delete_meme(
+        payload: MemeBatchDelete, _: None = Depends(require_token)
+    ):
         ids = sorted({int(item) for item in payload.ids if int(item) > 0})
         if not ids:
             raise HTTPException(status_code=400, detail="empty ids")
@@ -183,7 +193,9 @@ def main() -> None:
     args = parser.parse_args()
 
     if FastAPI is None:
-        raise SystemExit("缺少 fastapi/uvicorn 依赖，请先运行: pip install -r requirements.txt")
+        raise SystemExit(
+            "缺少 fastapi/uvicorn 依赖，请先运行: pip install -r requirements.txt"
+        )
 
     import uvicorn
 

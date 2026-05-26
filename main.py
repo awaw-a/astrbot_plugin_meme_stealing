@@ -112,7 +112,7 @@ class MemeStealingPlugin(Star):
             if self._is_meme_command(text):
                 message = (
                     "插件当前已在配置中禁用，无法执行该指令。"
-                    if self._is_admin(event)
+                    if self._can_use_command(event)
                     else self._admin_denied_message()
                 )
                 result = event.plain_result(message)
@@ -174,7 +174,7 @@ class MemeStealingPlugin(Star):
     async def _handle_command(self, event: AstrMessageEvent, text: str) -> str:
         command, args = split_command(text)
         group_id = self._get_group_id(event)
-        if not self._is_admin(event):
+        if not self._can_use_command(event):
             return self._admin_denied_message()
 
         if command in {"meme_save", "保存表情"}:
@@ -553,12 +553,17 @@ class MemeStealingPlugin(Star):
             return stored
         return self.config.auto_reply_enabled
 
+    def _can_use_command(self, event: AstrMessageEvent) -> bool:
+        return self.config.allow_all_users_commands or self._is_admin(event)
+
     def _is_admin(self, event: AstrMessageEvent) -> bool:
         if not self.config.admin_users:
             return False
         return self._get_sender_id(event) in self.config.admin_users
 
     def _admin_denied_message(self) -> str:
+        if self.config.allow_all_users_commands:
+            return ""
         if not self.config.admin_users:
             return "没有权限：尚未在插件配置 admin_users 中设置管理员 QQ 号。"
         return "没有权限：只有插件管理员可以使用该指令。"

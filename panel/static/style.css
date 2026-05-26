@@ -142,7 +142,17 @@ button.secondary {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
-  padding: 20px 24px 32px;
+  padding: 20px 24px 16px;
+}
+
+.pager {
+  display: flex;
+  justify-content: center;
+  padding: 4px 24px 32px;
+}
+
+.pager button {
+  min-width: 160px;
 }
 
 .card {

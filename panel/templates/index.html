@@ -45,6 +45,10 @@
 
     <main id="grid" class="grid"></main>
 
+    <div class="pager">
+      <button id="load-more" class="secondary" hidden>加载更多</button>
+    </div>
+
     <template id="card-template">
       <article class="card">
         <img class="preview" alt="表情包预览" />
@@ -81,6 +85,8 @@
 
     <script>
       const TOKEN_STORAGE_KEY = "astrbot_meme_panel_token";
+      const PAGE_SIZE = 120;
+      let currentOffset = 0;
       let token = new URLSearchParams(location.search).get("token") || localStorage.getItem(TOKEN_STORAGE_KEY) || "";
 
       const authMask = document.querySelector("#auth-mask");
@@ -96,6 +102,7 @@
       const batchDelete = document.querySelector("#batch-delete");
       const refresh = document.querySelector("#refresh");
       const logout = document.querySelector("#logout");
+      const loadMore = document.querySelector("#load-more");
       const tmpl = document.querySelector("#card-template");
 
       function withToken(path) {
@@ -219,21 +226,35 @@
         return node;
       }
 
-      async function load() {
-        grid.innerHTML = "<div class='empty'>加载中...</div>";
+      async function load(options = {}) {
+        const append = Boolean(options.append);
+        if (!append) {
+          currentOffset = 0;
+          loadMore.hidden = true;
+          grid.innerHTML = "<div class='empty'>加载中...</div>";
+        }
+        loadMore.disabled = true;
         const params = new URLSearchParams({
           q: q.value.trim(),
           status: status.value,
-          limit: "120",
+          limit: String(PAGE_SIZE),
+          offset: String(currentOffset),
         });
         const data = await request(`/api/memes?${params.toString()}`);
-        renderStats(data);
-        grid.innerHTML = "";
-        if (!data.items.length) {
+        if (!append) {
+          grid.innerHTML = "";
+        }
+        if (!data.items.length && !append) {
           grid.innerHTML = "<div class='empty'>没有匹配的表情包</div>";
+          loadMore.hidden = true;
+          renderStats(data);
           return;
         }
         data.items.forEach((item) => grid.appendChild(renderItem(item)));
+        currentOffset += data.items.length;
+        loadMore.hidden = !data.has_more;
+        loadMore.disabled = false;
+        renderStats(data);
       }
 
       authForm.addEventListener("submit", async (event) => {
@@ -250,6 +271,9 @@
 
       refresh.addEventListener("click", () => {
         load().catch((err) => showAuth(err.message));
+      });
+      loadMore.addEventListener("click", () => {
+        load({ append: true }).catch((err) => showAuth(err.message));
       });
       selectAll.addEventListener("click", () => {
         document.querySelectorAll(".select-meme").forEach((input) => {

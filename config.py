@@ -23,6 +23,7 @@ class MemeStealingConfig:
     auto_reply_cooldown_seconds: int = 120
     auto_collect_cooldown_seconds: int = 60
     admin_users: list[str] = field(default_factory=list)
+    allow_all_users_commands: bool = False
     admin_token: str = "change-me"
     panel_enabled: bool = True
     panel_host: str = "127.0.0.1"
@@ -48,14 +49,22 @@ class MemeStealingConfig:
         for field_name in cls.__dataclass_fields__:  # type: ignore[attr-defined]
             values[field_name] = data.get(field_name, getattr(defaults, field_name))
 
-        values["collect_probability"] = clamp_float(values["collect_probability"], 0.0, 1.0)
-        values["auto_reply_probability"] = clamp_float(values["auto_reply_probability"], 0.0, 1.0)
+        values["collect_probability"] = clamp_float(
+            values["collect_probability"], 0.0, 1.0
+        )
+        values["auto_reply_probability"] = clamp_float(
+            values["auto_reply_probability"], 0.0, 1.0
+        )
         values["image_max_size_mb"] = max(float(values["image_max_size_mb"]), 0.1)
         values["max_images_per_day"] = max(int(values["max_images_per_day"]), 0)
-        values["recent_image_cache_size"] = max(int(values["recent_image_cache_size"]), 1)
+        values["recent_image_cache_size"] = max(
+            int(values["recent_image_cache_size"]), 1
+        )
         values["panel_host"] = normalize_panel_host(values["panel_host"])
         values["panel_port"] = int(values["panel_port"])
-        values["llm_min_interval_seconds"] = max(float(values["llm_min_interval_seconds"]), 0.0)
+        values["llm_min_interval_seconds"] = max(
+            float(values["llm_min_interval_seconds"]), 0.0
+        )
         values["meme_filter_confidence_threshold"] = clamp_float(
             values["meme_filter_confidence_threshold"], 0.0, 1.0
         )
@@ -79,7 +88,9 @@ class MemeStealingConfig:
 
     @property
     def panel_url(self) -> str:
-        host = "<服务器公网IP或域名>" if self.panel_host == "0.0.0.0" else self.panel_host
+        host = (
+            "<服务器公网IP或域名>" if self.panel_host == "0.0.0.0" else self.panel_host
+        )
         return f"http://{host}:{self.panel_port}/?token={self.admin_token}"
 
     @property

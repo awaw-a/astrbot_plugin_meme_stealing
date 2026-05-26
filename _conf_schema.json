@@ -75,7 +75,13 @@
     "description": "管理员 QQ 号",
     "type": "list",
     "default": [],
-    "hint": "允许使用本插件全部指令的 QQ 号列表。为避免误操作，留空时任何人都不能使用指令，请至少填写一个管理员 QQ 号。"
+    "hint": "允许使用本插件全部指令的 QQ 号列表。关闭 allow_all_users_commands 时只有这些用户可以使用指令；若本项留空且 allow_all_users_commands 关闭，则任何人都不能使用指令。"
+  },
+  "allow_all_users_commands": {
+    "description": "允许所有人使用指令",
+    "type": "bool",
+    "default": false,
+    "hint": "开启后，群内任何用户都可以使用本插件的聊天指令；关闭时只有 admin_users 中配置的管理员 QQ 号可以使用指令。"
   },
   "admin_token": {
     "description": "管理面板 Token",
